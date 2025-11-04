@@ -26,7 +26,7 @@ const Header: React.FC<HeaderProps> = ({ onAdminClick, onMenuClick }) => {
           </button>
         </div>
       </div>
-       <div className="w-full h-1 bg-blue-400"></div>
+       <div className="w-full h-1 bg-red-400"></div>
     </header>
   );
 };
