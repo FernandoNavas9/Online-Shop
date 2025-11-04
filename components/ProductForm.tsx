@@ -1,148 +1,194 @@
-import React, { useState } from 'react';
-import { Product, Image } from '../types';
+import React, { useState, useCallback } from 'react';
+// Fix: Import GoogleGenAI class from "@google/genai"
+import { GoogleGenAI } from '@google/genai';
+import { Image, Product } from '../types';
 import ImageUploader from './ImageUploader';
 import ImageList from './ImageList';
-import { uploadImage } from '../api/upload';
+import { PlusIcon } from './icons';
 
 interface ProductFormProps {
-  product?: Product;
-  onSubmit: (productData: Omit<Product, 'id'>) => Promise<void>;
-  onCancel: () => void;
+  onAddProduct: (product: Product) => void;
 }
 
-const ProductForm: React.FC<ProductFormProps> = ({ product, onSubmit, onCancel }) => {
-  const [name, setName] = useState(product?.name || '');
-  const [description, setDescription] = useState(product?.description || '');
-  const [price, setPrice] = useState(product?.price || '');
-  const [category, setCategory] = useState(product?.category || '');
-  const [images, setImages] = useState<Image[]>(product?.images || []);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+const ProductForm: React.FC<ProductFormProps> = ({ onAddProduct }) => {
+  const [images, setImages] = useState<Image[]>([]);
+  const [productName, setProductName] = useState('');
+  const [productDescription, setProductDescription] = useState('');
+  const [price, setPrice] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleImageUpload = async (files: File[]) => {
-    setIsUploading(true);
+  const handleUpload = useCallback((files: File[]) => {
+    const newImages: Image[] = files.map(file => ({
+      id: self.crypto.randomUUID(),
+      url: URL.createObjectURL(file),
+      alt: file.name,
+      file,
+    }));
+    setImages(prev => [...prev, ...newImages]);
+  }, []);
+
+  const handleRemoveImage = useCallback((id: string) => {
+    setImages(prev => prev.filter(image => image.id !== id));
+  }, []);
+
+  const fileToGenerativePart = async (file: File) => {
+    const base64EncodedDataPromise = new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+      reader.readAsDataURL(file);
+    });
+    return {
+      inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
+    };
+  };
+
+  const generateDescription = async () => {
+    if (!process.env.API_KEY) {
+      alert("API_KEY environment variable not set.");
+      return;
+    }
+    if (images.length === 0) {
+      alert("Please upload at least one image.");
+      return;
+    }
+    
+    setIsGenerating(true);
+    setProductDescription('');
+    setProductName('');
+
     try {
-      const uploadPromises = files.map(async file => {
-        const { url } = await uploadImage(file);
-        return { id: `temp_${Date.now()}_${Math.random()}`, url, alt: file.name };
+      // Fix: Initialize GoogleGenAI with the API key in an object.
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      
+      const imageParts = await Promise.all(
+        images.map(image => fileToGenerativePart(image.file))
+      );
+
+      const prompt = "Based on these images, write a compelling product description for an e-commerce store. Also suggest a short, catchy product name. Format the response as:\nProduct Name: [Name]\n\nDescription: [Description]";
+      
+      // Fix: Use ai.models.generateContent and provide the model name.
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [...imageParts, { text: prompt }] },
       });
-      const uploadedImages = await Promise.all(uploadPromises);
-      setImages(prev => [...prev, ...uploadedImages]);
+
+      // Fix: Directly access the 'text' property from the response.
+      const text = response.text;
+      const nameMatch = text.match(/Product Name: (.*)/);
+      const descMatch = text.match(/Description: ([\s\S]*)/);
+      
+      if (nameMatch && nameMatch[1]) {
+        setProductName(nameMatch[1].trim());
+      }
+      
+      if (descMatch && descMatch[1]) {
+        setProductDescription(descMatch[1].trim());
+      } else {
+        setProductDescription(text);
+      }
+
     } catch (error) {
-      console.error("Image upload failed:", error);
-      alert("Image upload failed. Please try again.");
+      console.error("Error generating description:", error);
+      alert("Failed to generate description. Check the console for details.");
     } finally {
-      setIsUploading(false);
+      setIsGenerating(false);
     }
   };
 
-  const handleRemoveImage = (id: string) => {
-    setImages(prev => prev.filter(image => image.id !== id));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
-    setIsSubmitting(true);
+    if (!productName || !productDescription || images.length === 0 || !price) {
+        alert("Please fill all fields, upload images, and set a price.");
+        return;
+    }
+    const newProduct: Product = {
+        id: self.crypto.randomUUID(),
+        name: productName,
+        description: productDescription,
+        price: parseFloat(price),
+        images: images,
+    };
+    onAddProduct(newProduct);
     
-    await onSubmit({ 
-      name, 
-      description, 
-      price: Number(price), 
-      category, 
-      images 
-    });
-
-    setIsSubmitting(false);
+    setImages([]);
+    setProductName('');
+    setProductDescription('');
+    setPrice('');
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-          Product Name
-        </label>
-        <input
-          type="text"
-          id="name"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-          required
-        />
+        <h3 className="font-medium text-gray-700 mb-2">1. Upload Product Images</h3>
+        <ImageUploader onUpload={handleUpload} />
       </div>
+
+      {images.length > 0 && (
+        <div className="animate-fade-in-up">
+          <ImageList images={images} onRemoveImage={handleRemoveImage} />
+        </div>
+      )}
 
       <div>
-        <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-          Description
-        </label>
-        <textarea
-          id="description"
-          value={description}
-          onChange={e => setDescription(e.target.value)}
-          rows={3}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-          required
-        />
+         <h3 className="font-medium text-gray-700 mb-2">2. Generate Details with AI</h3>
+         <button
+          type="button"
+          onClick={generateDescription}
+          disabled={isGenerating || images.length === 0}
+          className="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors"
+         >
+          {isGenerating ? 'Generating...' : 'Generate Name & Description'}
+         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="space-y-4 animate-fade-in-up">
         <div>
-          <label htmlFor="price" className="block text-sm font-medium text-gray-700">
-            Price
-          </label>
+          <label htmlFor="productName" className="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
+          <input
+            type="text"
+            id="productName"
+            value={productName}
+            onChange={(e) => setProductName(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder="e.g. Classic Leather Tote Bag"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="productDescription" className="block text-sm font-medium text-gray-700 mb-1">Product Description</label>
+          <textarea
+            id="productDescription"
+            rows={6}
+            value={productDescription}
+            onChange={(e) => setProductDescription(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder="e.g. A timeless and versatile tote bag..."
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">Price</label>
           <input
             type="number"
             id="price"
             value={price}
-            onChange={e => setPrice(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            onChange={(e) => setPrice(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder="e.g. 99.99"
             required
             step="0.01"
-            min="0"
-          />
-        </div>
-        <div>
-          <label htmlFor="category" className="block text-sm font-medium text-gray-700">
-            Category
-          </label>
-          <input
-            type="text"
-            id="category"
-            value={category}
-            onChange={e => setCategory(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            required
           />
         </div>
       </div>
       
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Images</label>
-        <div className="mt-2">
-            <ImageList images={images} onRemoveImage={handleRemoveImage} />
-        </div>
-        <div className="mt-4">
-            <ImageUploader onUpload={handleImageUpload} />
-            {isUploading && <p className="mt-2 text-sm text-gray-500 animate-pulse">Uploading images...</p>}
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-4 pt-4 border-t">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={isSubmitting}
-          className="rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
-        >
-          Cancel
-        </button>
+      <div className="pt-4">
         <button
           type="submit"
-          disabled={isSubmitting || isUploading}
-          className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={!productName || !productDescription || images.length === 0 || !price}
+          className="w-full flex items-center justify-center gap-2 bg-brand-primary text-white font-bold py-3 px-4 rounded-lg hover:bg-opacity-90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
         >
-          {isSubmitting ? 'Saving...' : (product ? 'Save Changes' : 'Add Product')}
+          <PlusIcon className="w-5 h-5" />
+          Add Product
         </button>
       </div>
     </form>

@@ -2,6 +2,7 @@ export interface Image {
   id: string;
   url: string;
   alt: string;
+  file: File;
 }
 
 export interface Product {
@@ -9,6 +10,5 @@ export interface Product {
   name: string;
   description: string;
   price: number;
-  category: string;
   images: Image[];
 }
