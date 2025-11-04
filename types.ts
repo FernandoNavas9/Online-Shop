@@ -1,6 +1,14 @@
-export interface ImagePost {
-  id: number;
-  image_url: string;
+export interface Image {
+  id: string;
+  url: string;
+  alt: string;
+}
+
+export interface Product {
+  id: string;
+  name: string;
   description: string;
-  created_at: string;
+  price: number;
+  category: string;
+  images: Image[];
 }
