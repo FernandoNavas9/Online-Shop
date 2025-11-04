@@ -4,6 +4,7 @@ import Header from './components/Header';
 import ProductGrid from './components/ProductGrid';
 import Sidebar from './components/Sidebar';
 import { Product } from './types';
+import Footer from './components/Footer';
 
 function App() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -75,6 +76,7 @@ function App() {
             </div>
           </main>
         )}
+        <Footer />
       </div>
     </div>
   );
