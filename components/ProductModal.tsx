@@ -71,9 +71,6 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose }) => {
             </div>
 
             <p className="text-4xl font-light text-brand-primary mb-6">{formatCurrency(product.price)}</p>
-            <button className="w-full bg-brand-primary text-white font-bold py-3 px-4 rounded-lg hover:bg-opacity-90 transition-colors">
-              Add to Cart
-            </button>
           </div>
         </div>
       </div>

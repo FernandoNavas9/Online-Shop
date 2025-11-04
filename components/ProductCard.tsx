@@ -26,7 +26,10 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onProductClick }) =>
       </div>
       <div className="p-4">
         <h3 className="font-bold text-lg text-brand-dark truncate">{product.name}</h3>
-        <p className="text-gray-500 text-sm">{product.subcategory}</p>
+        <p className="text-gray-500 text-sm">
+          {product.subcategory}
+          {product.size && ` - Talla: ${product.size}`}
+        </p>
         <p className="text-gray-800 font-semibold mt-2">{formatCurrency(product.price)}</p>
       </div>
     </div>
