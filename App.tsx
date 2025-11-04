@@ -56,28 +56,26 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen bg-brand-secondary">
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header onAdminClick={() => setIsAdminView(true)} onMenuClick={() => setIsSidebarOpen(true)} />
-        {isAdminView ? (
-          <AdminPanel onBackToStore={() => setIsAdminView(false)} onProductAdded={handleProductAdded} />
-        ) : (
-          <main className="flex-1 flex">
-            <Sidebar 
-              onFilterChange={handleFilterChange} 
-              activeFilter={filter} 
-              isOpen={isSidebarOpen} 
-              onClose={() => setIsSidebarOpen(false)} 
-            />
-            <div className="flex-1 p-6 md:p-10 overflow-y-auto">
-              <h1 className="text-3xl font-bold text-brand-dark mb-2">{filter.subcategory === 'Todos' ? filter.category : filter.subcategory}</h1>
-              <hr className="border-brand-primary mb-6" />
-              <ProductGrid products={products} isLoading={isLoading} error={error} />
-            </div>
-          </main>
-        )}
-        <Footer />
-      </div>
+    <div className="flex flex-col h-screen bg-brand-secondary">
+      <Header onAdminClick={() => setIsAdminView(true)} onMenuClick={() => setIsSidebarOpen(true)} />
+      {isAdminView ? (
+        <AdminPanel onBackToStore={() => setIsAdminView(false)} onProductAdded={handleProductAdded} />
+      ) : (
+        <main className="flex-1 flex overflow-hidden">
+          <Sidebar 
+            onFilterChange={handleFilterChange} 
+            activeFilter={filter} 
+            isOpen={isSidebarOpen} 
+            onClose={() => setIsSidebarOpen(false)} 
+          />
+          <div className="flex-1 p-6 md:p-10 overflow-y-auto">
+            <h1 className="text-3xl font-bold text-brand-dark mb-2">{filter.subcategory === 'Todos' ? filter.category : filter.subcategory}</h1>
+            <hr className="border-brand-primary mb-6" />
+            <ProductGrid products={products} isLoading={isLoading} error={error} />
+          </div>
+        </main>
+      )}
+      <Footer />
     </div>
   );
 }
