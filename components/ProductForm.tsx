@@ -1,8 +1,9 @@
+import React, { useState, ChangeEvent } from 'react';
+import { X, UploadCloud } from 'lucide-react';
 
-import React, { useState, useEffect } from 'react';
-import { Product } from '../types';
-import ImageUploader from './ImageUploader';
-import { LoaderCircle } from 'lucide-react';
+interface ProductFormProps {
+  onProductAdded: () => void;
+}
 
 const categories = {
   'Bebé': ['Playera', 'Body', 'Pijama', 'Conjuntos', 'Pantalones', 'Accesorios'],
@@ -12,97 +13,73 @@ const categories = {
 
 type Category = keyof typeof categories;
 
-interface ProductFormProps {
-  onProductAdded: () => void;
-  onCancel: () => void;
-  productToEdit?: Product | null;
-}
-
-const ProductForm: React.FC<ProductFormProps> = ({ onProductAdded, onCancel, productToEdit }) => {
-  const [product, setProduct] = useState({
-    name: '',
-    description: '',
-    price: '',
-    stock: '',
-    category: 'Bebé' as Category,
-    subcategory: categories['Bebé'][0],
-    color: '',
-    brand: '',
-    size: '',
-    images: [] as string[],
+const ProductForm: React.FC<ProductFormProps> = ({ onProductAdded }) => {
+  const [formState, setFormState] = useState({
+    name: '', description: '', price: '', stock: '', 
+    category: 'Bebé' as Category, subcategory: categories['Bebé'][0],
+    color: '', brand: '', size: '',
   });
+  const [images, setImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  useEffect(() => {
-    if (productToEdit) {
-      setProduct({
-        name: productToEdit.name,
-        description: productToEdit.description,
-        price: String(productToEdit.price),
-        stock: String(productToEdit.stock),
-        category: productToEdit.category,
-        subcategory: productToEdit.subcategory,
-        color: productToEdit.color || '',
-        brand: productToEdit.brand || '',
-        size: productToEdit.size || '',
-        images: productToEdit.images || [],
-      });
-    }
-  }, [productToEdit]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setProduct(prev => ({ ...prev, [name]: value }));
+    setFormState(prev => ({ ...prev, [name]: value }));
+    if (name === 'category') {
+      setFormState(prev => ({ ...prev, subcategory: categories[value as Category][0] }));
+    }
   };
 
-  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newCategory = e.target.value as Category;
-    setProduct(prev => ({
-      ...prev,
-      category: newCategory,
-      subcategory: categories[newCategory][0],
-    }));
+  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      const newImages = [...images, ...files];
+      setImages(newImages);
+      // FIX: The `file` was being inferred as `unknown`. Casting to `Blob` resolves the typing issue
+      // for `URL.createObjectURL` which expects a Blob or MediaSource.
+      const newPreviews = files.map(file => URL.createObjectURL(file as Blob));
+      setImagePreviews(prev => [...prev, ...newPreviews]);
+    }
   };
   
-  const handleImagesChange = (newImages: string[]) => {
-    setProduct(prev => ({ ...prev, images: newImages }));
+  const handleRemoveImage = (index: number) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setError(null);
-    
-    const productData = {
-        ...product,
-        price: parseFloat(product.price),
-        stock: parseInt(product.stock, 10)
-    };
-    
-    if (isNaN(productData.price) || isNaN(productData.stock)) {
-        setError("Price and stock must be valid numbers.");
-        setIsSubmitting(false);
-        return;
+    if (!formState.name || !formState.price || !formState.stock || images.length === 0) {
+      setError('Nombre, precio, stock y al menos una imagen son requeridos.');
+      return;
     }
+    setError(null);
+    setIsSubmitting(true);
+
+    const formData = new FormData();
+    Object.entries(formState).forEach(([key, value]) => {
+      // FIX: The `value` from `Object.entries(formState)` was inferred as `unknown`.
+      // Since all values in formState are strings, we can safely cast it to `string`
+      // to satisfy the `formData.append` method signature.
+      formData.append(key, value as string);
+    });
+    images.forEach(image => {
+      formData.append('images', image);
+    });
 
     try {
-      const url = productToEdit ? `/api/admin/products/${productToEdit.id}` : '/api/admin/add-product';
-      const method = productToEdit ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(productData),
+      const response = await fetch('/api/admin/add-product', {
+        method: 'POST',
+        body: formData,
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to save product');
+        const errData = await response.json();
+        throw new Error(errData.message || 'Failed to add product');
       }
-
+      
       onProductAdded();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
@@ -112,79 +89,97 @@ const ProductForm: React.FC<ProductFormProps> = ({ onProductAdded, onCancel, pro
   };
 
   return (
-    <div className="bg-white p-8 rounded-lg shadow animate-fade-in-up">
-        <h2 className="text-2xl font-bold text-brand-dark mb-6">{productToEdit ? 'Editar Producto' : 'Añadir Nuevo Producto'}</h2>
-        <form onSubmit={handleSubmit}>
-            {error && <p className="text-red-500 bg-red-100 p-3 rounded-md mb-4">{error}</p>}
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Product Info */}
-                <div className="space-y-4">
-                    <div>
-                        <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nombre</label>
-                        <input type="text" name="name" id="name" value={product.name} onChange={handleChange} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
-                    </div>
-                     <div>
-                        <label htmlFor="description" className="block text-sm font-medium text-gray-700">Descripción</label>
-                        <textarea name="description" id="description" rows={4} value={product.description} onChange={handleChange} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"></textarea>
-                    </div>
-                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="price" className="block text-sm font-medium text-gray-700">Precio</label>
-                            <input type="number" step="0.01" name="price" id="price" value={product.price} onChange={handleChange} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
-                        </div>
-                        <div>
-                            <label htmlFor="stock" className="block text-sm font-medium text-gray-700">Stock</label>
-                            <input type="number" name="stock" id="stock" value={product.stock} onChange={handleChange} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="category" className="block text-sm font-medium text-gray-700">Categoría</label>
-                            <select name="category" id="category" value={product.category} onChange={handleCategoryChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                {Object.keys(categories).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label htmlFor="subcategory" className="block text-sm font-medium text-gray-700">Subcategoría</label>
-                            <select name="subcategory" id="subcategory" value={product.subcategory} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                {categories[product.category].map(sub => <option key={sub} value={sub}>{sub}</option>)}
-                            </select>
-                        </div>
-                    </div>
-                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                           <label htmlFor="brand" className="block text-sm font-medium text-gray-700">Marca (Opcional)</label>
-                           <input type="text" name="brand" id="brand" value={product.brand} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
-                        </div>
-                        <div>
-                           <label htmlFor="color" className="block text-sm font-medium text-gray-700">Color (Opcional)</label>
-                           <input type="text" name="color" id="color" value={product.color} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
-                        </div>
-                    </div>
-                     <div>
-                        <label htmlFor="size" className="block text-sm font-medium text-gray-700">Talla (Opcional)</label>
-                        <input type="text" name="size" id="size" value={product.size} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
-                    </div>
-                </div>
-                {/* Image Uploader */}
-                <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-2">Imágenes</label>
-                     <ImageUploader initialImages={product.images} onImagesChange={handleImagesChange} />
-                </div>
-            </div>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nombre del Producto</label>
+          <input type="text" name="name" id="name" value={formState.name} onChange={handleInputChange} required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" />
+        </div>
+        <div>
+          <label htmlFor="brand" className="block text-sm font-medium text-gray-700">Marca</label>
+          <input type="text" name="brand" id="brand" value={formState.brand} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" />
+        </div>
+      </div>
+      
+      <div>
+        <label htmlFor="description" className="block text-sm font-medium text-gray-700">Descripción</label>
+        <textarea name="description" id="description" value={formState.description} onChange={handleInputChange} rows={4} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"></textarea>
+      </div>
 
-            <div className="mt-8 flex justify-end space-x-4">
-                <button type="button" onClick={onCancel} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition-colors">
-                    Cancelar
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div>
+          <label htmlFor="price" className="block text-sm font-medium text-gray-700">Precio</label>
+          <input type="number" name="price" id="price" value={formState.price} onChange={handleInputChange} required step="0.01" min="0" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" />
+        </div>
+        <div>
+          <label htmlFor="stock" className="block text-sm font-medium text-gray-700">Stock</label>
+          <input type="number" name="stock" id="stock" value={formState.stock} onChange={handleInputChange} required min="0" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" />
+        </div>
+        <div>
+          <label htmlFor="color" className="block text-sm font-medium text-gray-700">Color</label>
+          <input type="text" name="color" id="color" value={formState.color} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" />
+        </div>
+        <div>
+          <label htmlFor="size" className="block text-sm font-medium text-gray-700">Talla</label>
+          <input type="text" name="size" id="size" value={formState.size} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" />
+        </div>
+      </div>
+
+       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label htmlFor="category" className="block text-sm font-medium text-gray-700">Categoría</label>
+          <select name="category" id="category" value={formState.category} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+            {Object.keys(categories).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="subcategory" className="block text-sm font-medium text-gray-700">Subcategoría</label>
+          <select name="subcategory" id="subcategory" value={formState.subcategory} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+            {categories[formState.category].map(sub => <option key={sub} value={sub}>{sub}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Imágenes</label>
+        <div className="mt-1">
+            <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-brand-primary hover:text-brand-primary focus-within:outline-none flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed">
+              <div className="space-y-1 text-center">
+                <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
+                <div className="flex text-sm text-gray-600">
+                  <span>Sube los archivos</span>
+                  <input onChange={handleImageChange} id="file-upload" name="file-upload" type="file" className="sr-only" multiple accept="image/*" />
+                </div>
+                <p className="text-xs text-gray-500">PNG, JPG, GIF</p>
+              </div>
+            </label>
+        </div>
+        {imagePreviews.length > 0 && (
+          <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+            {imagePreviews.map((src, index) => (
+              <div key={index} className="relative group aspect-square">
+                <img src={src} alt={`Preview ${index}`} className="w-full h-full object-cover rounded-lg" />
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-300 rounded-lg" />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveImage(index)}
+                  className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100"
+                  aria-label="Remove image"
+                >
+                  <X className="w-4 h-4" />
                 </button>
-                <button type="submit" disabled={isSubmitting} className="bg-brand-primary hover:bg-opacity-90 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center">
-                    {isSubmitting && <LoaderCircle className="w-5 h-5 animate-spin mr-2" />}
-                    {productToEdit ? 'Guardar Cambios' : 'Añadir Producto'}
-                </button>
-            </div>
-        </form>
-    </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {error && <p className="text-red-500 text-sm">{error}</p>}
+
+      <button type="submit" disabled={isSubmitting} className="w-full bg-brand-primary text-white py-2.5 px-4 rounded-md hover:bg-opacity-90 disabled:bg-gray-400 font-semibold">
+        {isSubmitting ? 'Añadiendo...' : 'Añadir Producto'}
+      </button>
+    </form>
   );
 };
 
