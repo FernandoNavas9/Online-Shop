@@ -1,9 +1,71 @@
-import React, { useState, ChangeEvent } from 'react';
-import { X, UploadCloud } from 'lucide-react';
+import React, { useState, FormEvent, useEffect } from 'react';
+import { Product } from '../types';
+import { GoogleGenAI } from '@google/genai';
 
 interface ProductFormProps {
   onProductAdded: () => void;
+  onCancel: () => void;
+  productToEdit?: Product | null;
 }
+
+// A simple mock for image upload since the uploader component is missing.
+// In a real app, this would handle file selection and upload to a service like Cloudinary or S3.
+const ImageUploader = ({ images, setImages }: { images: string[], setImages: (images: string[]) => void }) => {
+  const [newImageUrl, setNewImageUrl] = useState('');
+
+  const handleAddImage = () => {
+    if (newImageUrl && !images.includes(newImageUrl)) {
+      try {
+        new URL(newImageUrl); // Validate URL
+        setImages([...images, newImageUrl]);
+        setNewImageUrl('');
+      } catch (_) {
+        alert('Please enter a valid URL.');
+      }
+    }
+  };
+
+  const handleRemoveImage = (url: string) => {
+    setImages(images.filter(img => img !== url));
+  };
+  
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700">Imágenes (URLs)</label>
+      <div className="mt-1 flex rounded-md shadow-sm">
+        <input
+          type="url"
+          value={newImageUrl}
+          onChange={(e) => setNewImageUrl(e.target.value)}
+          placeholder="https://example.com/image.png"
+          className="flex-1 block w-full rounded-none rounded-l-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+        />
+        <button
+          type="button"
+          onClick={handleAddImage}
+          className="inline-flex items-center rounded-r-md border border-l-0 border-gray-300 bg-gray-50 px-3 text-sm text-gray-500 hover:bg-gray-100"
+        >
+          Añadir
+        </button>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {images.map(url => (
+          <div key={url} className="relative">
+            <img src={url} alt="product preview" className="h-20 w-20 rounded object-cover" />
+            <button
+              type="button"
+              onClick={() => handleRemoveImage(url)}
+              className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 
 const categories = {
   'Bebé': ['Playera', 'Body', 'Pijama', 'Conjuntos', 'Pantalones', 'Accesorios'],
@@ -13,73 +75,96 @@ const categories = {
 
 type Category = keyof typeof categories;
 
-const ProductForm: React.FC<ProductFormProps> = ({ onProductAdded }) => {
-  const [formState, setFormState] = useState({
-    name: '', description: '', price: '', stock: '', 
-    category: 'Bebé' as Category, subcategory: categories['Bebé'][0],
-    color: '', brand: '', size: '',
+const ProductForm: React.FC<ProductFormProps> = ({ onProductAdded, onCancel, productToEdit }) => {
+  const [product, setProduct] = useState<Omit<Product, 'id' | 'created_at'>>({
+    name: '',
+    description: '',
+    price: 0,
+    stock: 0,
+    category: 'Bebé',
+    subcategory: 'Playera',
+    color: '',
+    brand: '',
+    size: '',
+    images: [],
   });
-  const [images, setImages] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  useEffect(() => {
+    if (productToEdit) {
+      setProduct(productToEdit);
+    }
+  }, [productToEdit]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormState(prev => ({ ...prev, [name]: value }));
-    if (name === 'category') {
-      setFormState(prev => ({ ...prev, subcategory: categories[value as Category][0] }));
-    }
-  };
-
-  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      const newImages = [...images, ...files];
-      setImages(newImages);
-      // FIX: The `file` was being inferred as `unknown`. Casting to `Blob` resolves the typing issue
-      // for `URL.createObjectURL` which expects a Blob or MediaSource.
-      const newPreviews = files.map(file => URL.createObjectURL(file as Blob));
-      setImagePreviews(prev => [...prev, ...newPreviews]);
-    }
+    setProduct(prev => ({ ...prev, [name]: name === 'price' || name === 'stock' ? Number(value) : value }));
   };
   
-  const handleRemoveImage = (index: number) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
-    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newCategory = e.target.value as Category;
+    setProduct(prev => ({
+      ...prev,
+      category: newCategory,
+      subcategory: categories[newCategory][0] // Reset subcategory
+    }));
+  };
+  
+  const handleImageChange = (images: string[]) => {
+    setProduct(prev => ({ ...prev, images }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formState.name || !formState.price || !formState.stock || images.length === 0) {
-      setError('Nombre, precio, stock y al menos una imagen son requeridos.');
+  const generateDescription = async () => {
+    if (!product.name) {
+      alert('Por favor, introduce un nombre para el producto para generar una descripción.');
       return;
     }
+    setIsGenerating(true);
     setError(null);
-    setIsSubmitting(true);
+    try {
+      // Fix: Use the correct constructor and API call as per the guidelines.
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Generate a compelling and short product description in Spanish for a children's clothing item named "${product.name}". The category is "${product.category}" and subcategory is "${product.subcategory}". Mention it's comfortable and stylish. Keep it under 50 words.`
+      });
+      // Fix: Extract text directly from the response object.
+      const text = response.text;
+      setProduct(p => ({ ...p, description: text }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to generate description');
+      console.error(e);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
-    const formData = new FormData();
-    Object.entries(formState).forEach(([key, value]) => {
-      // FIX: The `value` from `Object.entries(formState)` was inferred as `unknown`.
-      // Since all values in formState are strings, we can safely cast it to `string`
-      // to satisfy the `formData.append` method signature.
-      formData.append(key, value as string);
-    });
-    images.forEach(image => {
-      formData.append('images', image);
-    });
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+    
+    const endpoint = productToEdit ? `/api/admin/products/${(productToEdit as Product).id}` : '/api/admin/add-product';
+    const method = productToEdit ? 'PUT' : 'POST';
 
     try {
-      const response = await fetch('/api/admin/add-product', {
-        method: 'POST',
-        body: formData,
+      const response = await fetch(endpoint, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(product),
       });
 
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.message || 'Failed to add product');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Something went wrong');
       }
-      
+
       onProductAdded();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
@@ -89,96 +174,86 @@ const ProductForm: React.FC<ProductFormProps> = ({ onProductAdded }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6 bg-white p-8 rounded-lg shadow animate-fade-in-up">
+      <h2 className="text-2xl font-bold text-brand-dark">{productToEdit ? 'Editar Producto' : 'Añadir Nuevo Producto'}</h2>
+      {error && <p className="text-red-500 bg-red-100 p-3 rounded">{error}</p>}
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Product Name */}
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nombre del Producto</label>
-          <input type="text" name="name" id="name" value={formState.name} onChange={handleInputChange} required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" />
+          <input type="text" name="name" id="name" value={product.name} onChange={handleChange} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
         </div>
-        <div>
-          <label htmlFor="brand" className="block text-sm font-medium text-gray-700">Marca</label>
-          <input type="text" name="brand" id="brand" value={formState.brand} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" />
-        </div>
-      </div>
-      
-      <div>
-        <label htmlFor="description" className="block text-sm font-medium text-gray-700">Descripción</label>
-        <textarea name="description" id="description" value={formState.description} onChange={handleInputChange} rows={4} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"></textarea>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Price */}
         <div>
           <label htmlFor="price" className="block text-sm font-medium text-gray-700">Precio</label>
-          <input type="number" name="price" id="price" value={formState.price} onChange={handleInputChange} required step="0.01" min="0" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" />
+          <input type="number" name="price" id="price" value={product.price} onChange={handleChange} required min="0" step="0.01" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
         </div>
-        <div>
-          <label htmlFor="stock" className="block text-sm font-medium text-gray-700">Stock</label>
-          <input type="number" name="stock" id="stock" value={formState.stock} onChange={handleInputChange} required min="0" className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" />
-        </div>
-        <div>
-          <label htmlFor="color" className="block text-sm font-medium text-gray-700">Color</label>
-          <input type="text" name="color" id="color" value={formState.color} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" />
-        </div>
-        <div>
-          <label htmlFor="size" className="block text-sm font-medium text-gray-700">Talla</label>
-          <input type="text" name="size" id="size" value={formState.size} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" />
-        </div>
-      </div>
 
-       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Description */}
+        <div className="md:col-span-2">
+          <label htmlFor="description" className="block text-sm font-medium text-gray-700">Descripción</label>
+          <textarea name="description" id="description" value={product.description} onChange={handleChange} rows={4} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+          <button type="button" onClick={generateDescription} disabled={isGenerating || !product.name} className="mt-2 text-sm text-indigo-600 hover:text-indigo-900 disabled:opacity-50 disabled:cursor-not-allowed">
+            {isGenerating ? 'Generando...' : '✨ Generar con IA'}
+          </button>
+        </div>
+
+        {/* Category */}
         <div>
           <label htmlFor="category" className="block text-sm font-medium text-gray-700">Categoría</label>
-          <select name="category" id="category" value={formState.category} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+          <select name="category" id="category" value={product.category} onChange={handleCategoryChange} required className="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm">
             {Object.keys(categories).map(cat => <option key={cat} value={cat}>{cat}</option>)}
           </select>
         </div>
+
+        {/* Subcategory */}
         <div>
           <label htmlFor="subcategory" className="block text-sm font-medium text-gray-700">Subcategoría</label>
-          <select name="subcategory" id="subcategory" value={formState.subcategory} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
-            {categories[formState.category].map(sub => <option key={sub} value={sub}>{sub}</option>)}
+          <select name="subcategory" id="subcategory" value={product.subcategory} onChange={handleChange} required className="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm">
+            {categories[product.category as keyof typeof categories].map(sub => <option key={sub} value={sub}>{sub}</option>)}
           </select>
         </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Imágenes</label>
-        <div className="mt-1">
-            <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-brand-primary hover:text-brand-primary focus-within:outline-none flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed">
-              <div className="space-y-1 text-center">
-                <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
-                <div className="flex text-sm text-gray-600">
-                  <span>Sube los archivos</span>
-                  <input onChange={handleImageChange} id="file-upload" name="file-upload" type="file" className="sr-only" multiple accept="image/*" />
-                </div>
-                <p className="text-xs text-gray-500">PNG, JPG, GIF</p>
-              </div>
-            </label>
+        
+        {/* Stock */}
+        <div>
+          <label htmlFor="stock" className="block text-sm font-medium text-gray-700">Stock</label>
+          <input type="number" name="stock" id="stock" value={product.stock} onChange={handleChange} required min="0" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
         </div>
-        {imagePreviews.length > 0 && (
-          <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
-            {imagePreviews.map((src, index) => (
-              <div key={index} className="relative group aspect-square">
-                <img src={src} alt={`Preview ${index}`} className="w-full h-full object-cover rounded-lg" />
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-300 rounded-lg" />
-                <button
-                  type="button"
-                  onClick={() => handleRemoveImage(index)}
-                  className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100"
-                  aria-label="Remove image"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+
+        {/* Size */}
+        <div>
+          <label htmlFor="size" className="block text-sm font-medium text-gray-700">Talla</label>
+          <input type="text" name="size" id="size" value={product.size || ''} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+        </div>
+
+        {/* Color */}
+        <div>
+          <label htmlFor="color" className="block text-sm font-medium text-gray-700">Color</label>
+          <input type="text" name="color" id="color" value={product.color || ''} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+        </div>
+
+        {/* Brand */}
+        <div>
+          <label htmlFor="brand" className="block text-sm font-medium text-gray-700">Marca</label>
+          <input type="text" name="brand" id="brand" value={product.brand || ''} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+        </div>
+
+        {/* Images */}
+        <div className="md:col-span-2">
+            <ImageUploader images={product.images} setImages={handleImageChange} />
+        </div>
       </div>
-
-      {error && <p className="text-red-500 text-sm">{error}</p>}
-
-      <button type="submit" disabled={isSubmitting} className="w-full bg-brand-primary text-white py-2.5 px-4 rounded-md hover:bg-opacity-90 disabled:bg-gray-400 font-semibold">
-        {isSubmitting ? 'Añadiendo...' : 'Añadir Producto'}
-      </button>
+      
+      <div className="flex justify-end space-x-4">
+        <button type="button" onClick={onCancel} className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+          Cancelar
+        </button>
+        <button type="submit" disabled={isSubmitting} className="inline-flex justify-center rounded-md border border-transparent bg-brand-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 disabled:opacity-50">
+          {isSubmitting ? 'Guardando...' : (productToEdit ? 'Guardar Cambios' : 'Añadir Producto')}
+        </button>
+      </div>
     </form>
   );
 };
