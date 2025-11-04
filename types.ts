@@ -2,7 +2,6 @@ export interface Image {
   id: string;
   url: string;
   alt: string;
-  file: File;
 }
 
 export interface Product {

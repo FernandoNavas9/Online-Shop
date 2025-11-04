@@ -11,9 +11,9 @@ const ImageList: React.FC<ImageListProps> = ({ images, onRemoveImage }) => {
   if (images.length === 0) {
     return null;
   }
-  
+
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
+    <div className="mt-4 grid grid-cols-3 gap-4">
       {images.map(image => (
         <ImageCard key={image.id} image={image} onRemove={onRemoveImage} />
       ))}

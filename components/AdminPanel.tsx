@@ -1,22 +1,25 @@
-import React, { useState } from 'react';
-import { Product } from '../types';
+import React from 'react';
 import ProductForm from './ProductForm';
-import ProductGrid from './ProductGrid';
+import { Product } from '../types';
+import { XIcon } from './icons';
 
-const AdminPanel = () => {
-  const [products, setProducts] = useState<Product[]>([]);
-  
-  const addProduct = (product: Product) => {
-    setProducts(prev => [product, ...prev]);
-  };
+interface AdminPanelProps {
+  closePanel: () => void;
+  onProductAdd: (product: Product) => void;
+}
 
+const AdminPanel: React.FC<AdminPanelProps> = ({ closePanel, onProductAdd }) => {
   return (
-    <div>
-      <h1 className="text-3xl font-semibold text-gray-800 mb-6">Product Management</h1>
-      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-        <ProductForm onAddProduct={addProduct} />
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-end">
+      <div className="bg-white w-full max-w-md h-full shadow-lg p-6 overflow-y-auto animate-fade-in-up">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-brand-dark">Add New Product</h2>
+          <button onClick={closePanel} className="text-gray-500 hover:text-gray-800">
+            <XIcon className="w-6 h-6" />
+          </button>
+        </div>
+        <ProductForm onProductAdd={onProductAdd} />
       </div>
-      <ProductGrid products={products} />
     </div>
   );
 };

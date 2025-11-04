@@ -1,15 +1,11 @@
-import { Product } from "../../types";
+import { Product } from '../../types';
 
-// This is a mock API file. In a real application, this would send product data to a server.
-export async function addProduct(productData: Omit<Product, 'id'>): Promise<Product> {
-  console.log("Adding product:", productData);
-  // Simulate network delay and server-side ID generation
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
+export const addProduct = async (productData: Omit<Product, 'id'>): Promise<Product> => {
+  // Simulate API call to add a product
+  console.log('Adding product:', productData);
   const newProduct: Product = {
     ...productData,
-    id: self.crypto.randomUUID(),
+    id: new Date().getTime().toString(), // Generate a unique ID
   };
-  
-  return newProduct;
-}
+  return new Promise(resolve => setTimeout(() => resolve(newProduct), 500));
+};

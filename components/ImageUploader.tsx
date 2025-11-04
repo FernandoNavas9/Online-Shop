@@ -1,36 +1,39 @@
-import React, { useCallback } from 'react';
-import { useDropzone } from 'react-dropzone';
+import React, { ChangeEvent } from 'react';
+import { Image } from '../types';
+import { PlusIcon } from './icons';
 
 interface ImageUploaderProps {
-  onUpload: (files: File[]) => void;
+  onImageUpload: (images: Image[]) => void;
 }
 
-const ImageUploader: React.FC<ImageUploaderProps> = ({ onUpload }) => {
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    onUpload(acceptedFiles);
-  }, [onUpload]);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'image/*': ['.jpeg', '.png', '.gif', '.jpg'] },
-  });
+const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload }) => {
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      const files = Array.from(event.target.files);
+      const newImages: Image[] = files.map(file => ({
+        id: `${file.name}-${new Date().getTime()}`,
+        url: URL.createObjectURL(file),
+        alt: file.name,
+      }));
+      onImageUpload(newImages);
+    }
+  };
 
   return (
-    <div
-      {...getRootProps()}
-      className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
-        ${
-          isDragActive
-            ? 'border-indigo-500 bg-indigo-50'
-            : 'border-gray-300 hover:border-gray-400'
-        }`}
-    >
-      <input {...getInputProps()} />
-      {isDragActive ? (
-        <p className="text-indigo-600">Drop the files here ...</p>
-      ) : (
-        <p className="text-gray-500">Drag 'n' drop some files here, or click to select files</p>
-      )}
+    <div className="mt-1">
+        <label
+          htmlFor="file-upload"
+          className="relative cursor-pointer bg-white rounded-md font-medium text-brand-primary hover:text-brand-primary focus-within:outline-none flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed"
+        >
+          <div className="space-y-1 text-center">
+            <PlusIcon className="mx-auto h-12 w-12 text-gray-400" />
+            <div className="flex text-sm text-gray-600">
+              <span>Upload files</span>
+              <input onChange={handleFileChange} id="file-upload" name="file-upload" type="file" className="sr-only" multiple accept="image/*" />
+            </div>
+            <p className="text-xs text-gray-500">PNG, JPG, GIF</p>
+          </div>
+        </label>
     </div>
   );
 };
