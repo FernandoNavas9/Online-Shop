@@ -1,7 +1,6 @@
-
 export interface ImagePost {
-  id: string;
-  imageUrl: string;
+  id: number;
+  image_url: string;
   description: string;
-  file: File;
+  created_at: string;
 }

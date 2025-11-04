@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ImagePost } from '../types';
 
@@ -10,7 +9,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ imagePost }) => {
   return (
     <div className="group relative bg-white dark:bg-slate-800 shadow-lg rounded-lg overflow-hidden transition-transform duration-300 ease-in-out hover:scale-105">
       <img
-        src={imagePost.imageUrl}
+        src={imagePost.image_url}
         alt={imagePost.description}
         className="w-full h-56 object-cover"
       />

@@ -1,47 +1,62 @@
-
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import ImageUploader from './components/ImageUploader';
 import ImageList from './components/ImageList';
 import { ImagePost } from './types';
+import { SpinnerIcon } from './components/icons';
 
 function App() {
   const [images, setImages] = useState<ImagePost[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchImages = async () => {
+      try {
+        setError(null);
+        setIsFetching(true);
+        const response = await fetch('/api/images');
+        if (!response.ok) {
+          throw new Error('Failed to fetch images.');
+        }
+        const data = await response.json();
+        setImages(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      } finally {
+        setIsFetching(false);
+      }
+    };
+    fetchImages();
+  }, []);
 
   const handleSaveImage = useCallback(async (data: { file: File; description: string }) => {
-    setIsLoading(true);
+    setIsUploading(true);
+    setError(null);
 
-    // --- Backend Integration Point ---
-    // In a real application, you would replace this timeout with an API call.
-    // 1. Upload the file to a storage service (like Vercel Blob, S3, etc.).
-    //    You'll get a URL for the stored image.
-    // 2. Send the image URL and description to a Vercel Serverless Function.
-    // 3. The function would then insert a new record into your Neon (Postgres) database.
-    //
-    // Example:
-    // const formData = new FormData();
-    // formData.append('image', data.file);
-    // formData.append('description', data.description);
-    // const response = await fetch('/api/upload', { method: 'POST', body: formData });
-    // const newImagePost = await response.json();
-    // if (response.ok) {
-    //   setImages(prev => [newImagePost, ...prev]);
-    // } else {
-    //   // Handle error
-    // }
-    
-    // Simulating API call for demonstration purposes
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    const formData = new FormData();
+    formData.append('file', data.file);
+    formData.append('description', data.description);
 
-    const newImage: ImagePost = {
-      id: new Date().toISOString(),
-      imageUrl: URL.createObjectURL(data.file),
-      description: data.description,
-      file: data.file, // Note: In a real app, you wouldn't store the file object in state long-term
-    };
+    try {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
 
-    setImages(prevImages => [newImage, ...prevImages]);
-    setIsLoading(false);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to upload image.');
+      }
+      
+      const newImagePost = await response.json();
+      setImages(prev => [newImagePost, ...prev]);
+
+    } catch (err) {
+       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+    } finally {
+      setIsUploading(false);
+    }
   }, []);
 
   return (
@@ -56,12 +71,24 @@ function App() {
       </header>
 
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
+        {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6" role="alert">
+                <strong className="font-bold">Error: </strong>
+                <span className="block sm:inline">{error}</span>
+            </div>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             <div className="lg:col-span-1 lg:sticky lg:top-24">
-                <ImageUploader onImageSave={handleSaveImage} isLoading={isLoading} />
+                <ImageUploader onImageSave={handleSaveImage} isLoading={isUploading} />
             </div>
             <div className="lg:col-span-2">
+              {isFetching ? (
+                <div className="flex justify-center items-center h-64">
+                    <SpinnerIcon className="animate-spin h-12 w-12 text-indigo-500" />
+                </div>
+              ) : (
                 <ImageList images={images} />
+              )}
             </div>
         </div>
       </main>
