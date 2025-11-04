@@ -1,0 +1,5 @@
+{
+  "name": "Vercel Image Gallery",
+  "description": "An accessible web interface to upload images with descriptions, designed for deployment on Vercel with a Neon database backend.",
+  "requestFramePermissions": []
+}
