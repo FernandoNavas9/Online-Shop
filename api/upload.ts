@@ -1,12 +1,26 @@
+
 import { put } from '@vercel/blob';
 import { sql } from '@vercel/postgres';
 import { NextApiResponse, NextApiRequest } from 'next';
+import formidable from 'formidable';
+import fs from 'fs';
 
 export const config = {
   api: {
-    bodyParser: false, // Required for multipart/form-data
+    bodyParser: false,
   },
 };
+
+const parseForm = (req: NextApiRequest): Promise<{ fields: formidable.Fields; files: formidable.Files }> => {
+    const form = formidable({});
+    return new Promise((resolve, reject) => {
+        form.parse(req, (err, fields, files) => {
+            if (err) reject(err);
+            resolve({ fields, files });
+        });
+    });
+};
+
 
 export default async function handler(
   request: NextApiRequest,
@@ -17,18 +31,23 @@ export default async function handler(
   }
 
   try {
-    // Vercel's edge environment doesn't support formidable or busboy directly
-    // The request body needs to be handled as a stream
-    const formData = await request.formData();
-    const file = formData.get('file') as File | null;
-    const description = formData.get('description') as string | null;
+    const { fields, files } = await parseForm(request);
+
+    const descriptionField = fields.description;
+    const description = Array.isArray(descriptionField) ? descriptionField[0] : descriptionField;
+    
+    const fileField = files.file;
+    const file = Array.isArray(fileField) ? fileField[0] : fileField;
 
     if (!file || !description) {
       return response.status(400).json({ error: 'File and description are required.' });
     }
 
-    const blob = await put(file.name, file, {
+    const fileContent = fs.readFileSync(file.filepath);
+
+    const blob = await put(file.originalFilename || 'unknown-file', fileContent, {
       access: 'public',
+      contentType: file.mimetype || undefined,
     });
 
     const { rows } = await sql`
@@ -40,7 +59,8 @@ export default async function handler(
     return response.status(201).json(rows[0]);
 
   } catch (error) {
-    console.error(error);
-    return response.status(500).json({ error: 'Failed to upload image.' });
+    console.error('Upload error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    return response.status(500).json({ error: `Failed to upload image. ${errorMessage}` });
   }
 }
