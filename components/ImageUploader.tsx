@@ -1,83 +1,97 @@
-import React, { useCallback, useState } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { LoaderCircle, Upload } from 'lucide-react';
+
+import React, { useState, useRef } from 'react';
+import ImageList from './ImageList';
+import { UploadCloud, LoaderCircle } from 'lucide-react';
 
 interface ImageUploaderProps {
-  onImagesUploaded: (imageUrls: string[]) => void;
+  initialImages: string[];
+  onImagesChange: (images: string[]) => void;
 }
 
-const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesUploaded }) => {
+const ImageUploader: React.FC<ImageUploaderProps> = ({ initialImages, onImagesChange }) => {
+  const [images, setImages] = useState<string[]>(initialImages);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    if (acceptedFiles.length === 0) {
-      return;
-    }
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
     setIsUploading(true);
-    setUploadError(null);
+    setError(null);
+    const uploadedUrls: string[] = [];
 
-    const formData = new FormData();
-    acceptedFiles.forEach(file => {
-      formData.append('files', file);
-    });
+    for (const file of Array.from(files)) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
 
-    try {
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+        if (!response.ok) {
+          throw new Error('Image upload failed');
+        }
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Image upload failed');
+        const { url } = await response.json();
+        uploadedUrls.push(url);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred during upload.');
+        // Don't add partially uploaded images if one fails
+        setIsUploading(false);
+        return;
       }
-
-      const { urls } = await response.json();
-      onImagesUploaded(urls);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'An unknown error occurred';
-      setUploadError(message);
-    } finally {
-      setIsUploading(false);
     }
-  }, [onImagesUploaded]);
+    
+    const newImages = [...images, ...uploadedUrls];
+    setImages(newImages);
+    onImagesChange(newImages);
+    setIsUploading(false);
+  };
+  
+  const handleRemoveImage = (urlToRemove: string) => {
+    const newImages = images.filter(url => url !== urlToRemove);
+    setImages(newImages);
+    onImagesChange(newImages);
+  };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'image/jpeg': [],
-      'image/png': [],
-      'image/webp': [],
-      'image/gif': [],
-    },
-    multiple: true,
-  });
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  };
 
   return (
     <div>
-      <div
-        {...getRootProps()}
-        className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors
-        ${isDragActive ? 'border-brand-primary bg-brand-secondary' : 'border-gray-300 hover:border-brand-primary'}`}
-      >
-        <input {...getInputProps()} />
-        {isUploading ? (
-          <div className="flex flex-col items-center justify-center">
-            <LoaderCircle className="w-8 h-8 animate-spin text-brand-primary" />
-            <p className="mt-2 text-sm text-gray-500">Subiendo...</p>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center">
-            <Upload className="w-8 h-8 text-gray-400" />
-            <p className="mt-2 text-sm text-gray-500">
-              {isDragActive ? 'Suelta las imágenes aquí' : 'Arrastra y suelta imágenes aquí, o haz clic para seleccionar'}
-            </p>
-            <p className="text-xs text-gray-400">PNG, JPG, WEBP, GIF</p>
-          </div>
-        )}
-      </div>
-      {uploadError && <p className="mt-2 text-sm text-red-500">{uploadError}</p>}
+        <ImageList images={images} onRemoveImage={handleRemoveImage} />
+        
+        <div 
+            onClick={triggerFileInput}
+            className="mt-4 border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-brand-primary transition-colors"
+        >
+            <input 
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                multiple
+                accept="image/png, image/jpeg, image/gif, image/webp"
+            />
+            {isUploading ? (
+                <div className="flex flex-col items-center justify-center text-gray-500">
+                    <LoaderCircle className="w-8 h-8 animate-spin mb-2" />
+                    <span>Subiendo...</span>
+                </div>
+            ) : (
+                <div className="text-gray-500">
+                    <UploadCloud className="w-8 h-8 mx-auto mb-2" />
+                    <p className="font-semibold">Click para subir imágenes</p>
+                    <p className="text-xs">PNG, JPG, GIF hasta 10MB</p>
+                </div>
+            )}
+        </div>
+        {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
     </div>
   );
 };
