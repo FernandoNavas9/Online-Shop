@@ -12,7 +12,7 @@ const Footer: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center space-x-4">
-          <a href="https://www.facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="text-gray-500 hover:text-brand-primary transition-colors">
+          <a href="https://www.facebook.com/share/17sG83WJf7/" target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="text-gray-500 hover:text-brand-primary transition-colors">
             <Facebook size={24} />
           </a>
           <a href="https://www.instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="text-gray-500 hover:text-brand-primary transition-colors">
