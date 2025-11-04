@@ -63,9 +63,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ message: 'At least one image is required' });
     }
 
+    // FIX: Convert JS array to PostgreSQL array format
+    const imagesPgArray = `{${uploadedImageUrls.join(',')}}`;
+
     const result = await sql`
       INSERT INTO products (name, description, price, stock, category, subcategory, color, brand, size, images)
-      VALUES (${name}, ${description}, ${Number(price)}, ${Number(stock)}, ${category}, ${subcategory}, ${color || null}, ${brand || null}, ${size || null}, ${uploadedImageUrls})
+      VALUES (${name}, ${description}, ${Number(price)}, ${Number(stock)}, ${category}, ${subcategory}, ${color || null}, ${brand || null}, ${size || null}, ${imagesPgArray})
       RETURNING *;
     `;
 
