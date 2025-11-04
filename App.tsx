@@ -11,6 +11,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [isAdminView, setIsAdminView] = useState(false);
   const [filter, setFilter] = useState<{ category: string; subcategory: string }>({ category: 'Todos', subcategory: 'Todos' });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const fetchProducts = useCallback(async () => {
     setIsLoading(true);
@@ -47,16 +48,26 @@ function App() {
     fetchProducts();
     setIsAdminView(false); // Switch back to customer view
   };
+  
+  const handleFilterChange = (newFilter: { category: string; subcategory: string }) => {
+    setFilter(newFilter);
+    setIsSidebarOpen(false);
+  };
 
   return (
     <div className="flex h-screen bg-brand-secondary">
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header onAdminClick={() => setIsAdminView(true)} />
+        <Header onAdminClick={() => setIsAdminView(true)} onMenuClick={() => setIsSidebarOpen(true)} />
         {isAdminView ? (
           <AdminPanel onBackToStore={() => setIsAdminView(false)} onProductAdded={handleProductAdded} />
         ) : (
           <main className="flex-1 flex">
-            <Sidebar onFilterChange={setFilter} activeFilter={filter} />
+            <Sidebar 
+              onFilterChange={handleFilterChange} 
+              activeFilter={filter} 
+              isOpen={isSidebarOpen} 
+              onClose={() => setIsSidebarOpen(false)} 
+            />
             <div className="flex-1 p-6 md:p-10 overflow-y-auto">
               <h1 className="text-3xl font-bold text-brand-dark mb-2">{filter.subcategory === 'Todos' ? filter.category : filter.subcategory}</h1>
               <hr className="border-brand-primary mb-6" />
