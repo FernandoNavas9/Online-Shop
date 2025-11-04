@@ -1,45 +1,33 @@
-import { Product } from '../types';
+import { sql } from '@vercel/postgres';
+import { NextApiRequest, NextApiResponse } from 'next';
 
-const mockProducts: Product[] = [
-  {
-    id: '1',
-    name: 'Cozy Knit Sweater',
-    description: 'A warm and comfortable sweater, perfect for chilly days. Made from 100% recycled materials.',
-    price: 79.99,
-    images: [
-      { id: 'img1', url: 'https://placehold.co/600x600/f8719d/white?text=Sweater', alt: 'Cozy Knit Sweater' },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Classic Denim Jeans',
-    description: 'Timeless style meets modern comfort. These jeans are a wardrobe staple.',
-    price: 120.00,
-    images: [
-      { id: 'img2', url: 'https://placehold.co/600x600/f8719d/white?text=Jeans', alt: 'Classic Denim Jeans' },
-    ],
-  },
-  {
-    id: '3',
-    name: 'Leather Ankle Boots',
-    description: 'Stylish and durable, these boots will elevate any outfit.',
-    price: 150.50,
-    images: [
-      { id: 'img3', url: 'https://placehold.co/600x600/f8719d/white?text=Boots', alt: 'Leather Ankle Boots' },
-    ],
-  },
-  {
-    id: '4',
-    name: 'Minimalist Wristwatch',
-    description: 'A sleek and elegant timepiece for any occasion.',
-    price: 250.00,
-    images: [
-      { id: 'img4', url: 'https://placehold.co/600x600/f8719d/white?text=Watch', alt: 'Minimalist Wristwatch' },
-    ],
-  },
-];
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ message: 'Method Not Allowed' });
+  }
 
-export const getProducts = async (): Promise<Product[]> => {
-  // Simulate API delay
-  return new Promise(resolve => setTimeout(() => resolve(mockProducts), 500));
-};
+  const { category, subcategory } = req.query;
+
+  try {
+    let query = 'SELECT * FROM products';
+    const params = [];
+    
+    if (category && category !== 'Todos') {
+      query += ' WHERE category = $1';
+      params.push(category as string);
+      if (subcategory && subcategory !== 'Todos') {
+        query += ' AND subcategory = $2';
+        params.push(subcategory as string);
+      }
+    }
+    
+    query += ' ORDER BY created_at DESC';
+
+    const { rows } = await sql.query(query, params);
+    
+    return res.status(200).json(rows);
+  } catch (error) {
+    console.error('Failed to fetch products:', error);
+    return res.status(500).json({ message: 'Error fetching products' });
+  }
+}

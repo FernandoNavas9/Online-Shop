@@ -1,39 +1,81 @@
-import React from 'react';
-import { PlusIcon } from './icons';
+import React, { useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { cn } from '../lib/utils';
+
+const categories = {
+  'Bebé': ['Playera', 'Body', 'Pijama', 'Conjuntos', 'Pantalones', 'Accesorios'],
+  'Niña': ['Vestidos', 'Blusas', 'Pantalones', 'Chamarras', 'Accesorios'],
+  'Niño': ['Camisetas', 'Pantalones', 'Playeras', 'Chamarras', 'Accesorios'],
+};
+
+type Category = keyof typeof categories;
 
 interface SidebarProps {
-  isOpen: boolean;
-  setIsOpen: (isOpen: boolean) => void;
-  openAdminPanel: () => void;
+  onFilterChange: (filter: { category: string; subcategory: string }) => void;
+  activeFilter: { category: string; subcategory: string };
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, openAdminPanel }) => {
+const Sidebar: React.FC<SidebarProps> = ({ onFilterChange, activeFilter }) => {
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
+    'Bebé': true,
+  });
+
+  const toggleCategory = (category: Category) => {
+    setOpenCategories(prev => ({ ...prev, [category]: !prev[category] }));
+  };
+  
+  const handleFilterClick = (category: string, subcategory = 'Todos') => {
+    onFilterChange({ category, subcategory });
+  };
+
   return (
-    <>
-      <div className={`fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsOpen(false)}></div>
-      <div className={`fixed top-0 left-0 h-full w-64 bg-brand-dark text-white z-30 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:w-64 flex-shrink-0`}>
-        <div className="p-4">
-          <h2 className="text-2xl font-bold">Admin</h2>
-        </div>
-        <nav className="p-4">
-          <ul>
-            <li>
-              <button 
-                onClick={() => {
-                  openAdminPanel();
-                  setIsOpen(false); // Close sidebar on mobile after clicking
-                }}
-                className="flex items-center p-2 rounded-lg hover:bg-gray-700 w-full text-left"
-              >
-                <PlusIcon className="w-5 h-5 mr-3" />
-                Add Product
-              </button>
-            </li>
-            {/* Add more navigation items here */}
-          </ul>
-        </nav>
-      </div>
-    </>
+    <aside className="w-64 bg-white p-6 flex-shrink-0 hidden md:block">
+      <h2 className="text-xl font-bold text-brand-dark mb-4">Categorías</h2>
+      <ul className="space-y-2">
+        <li>
+          <button
+            onClick={() => handleFilterClick('Todos')}
+            className={cn(
+              "w-full text-left px-4 py-2 rounded-lg font-semibold",
+              activeFilter.category === 'Todos' ? "bg-brand-primary text-white" : "hover:bg-brand-secondary"
+            )}
+          >
+            Todos
+          </button>
+        </li>
+
+        {(Object.keys(categories) as Category[]).map(category => (
+          <li key={category}>
+            <button
+              onClick={() => toggleCategory(category)}
+              className="w-full flex justify-between items-center text-left py-2 font-semibold text-gray-700"
+            >
+              <span onClick={(e) => { e.stopPropagation(); handleFilterClick(category); }}>{category}</span>
+              {openCategories[category] ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+            </button>
+            {openCategories[category] && (
+              <ul className="pl-4 mt-1 border-l-2 border-brand-secondary">
+                {categories[category].map(subcategory => (
+                  <li key={subcategory}>
+                    <button
+                      onClick={() => handleFilterClick(category, subcategory)}
+                      className={cn(
+                        "w-full text-left px-4 py-1.5 text-sm rounded-md",
+                         activeFilter.category === category && activeFilter.subcategory === subcategory
+                          ? "text-brand-primary font-semibold"
+                          : "text-gray-600 hover:bg-brand-secondary"
+                      )}
+                    >
+                      {subcategory}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+    </aside>
   );
 };
 

@@ -1,25 +1,28 @@
 import React from 'react';
 import ProductForm from './ProductForm';
-import { Product } from '../types';
-import { XIcon } from './icons';
+import { ArrowLeft } from 'lucide-react';
 
 interface AdminPanelProps {
-  closePanel: () => void;
-  onProductAdd: (product: Product) => void;
+  onBackToStore: () => void;
+  onProductAdded: () => void;
 }
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ closePanel, onProductAdd }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToStore, onProductAdded }) => {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-end">
-      <div className="bg-white w-full max-w-md h-full shadow-lg p-6 overflow-y-auto animate-fade-in-up">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-brand-dark">Add New Product</h2>
-          <button onClick={closePanel} className="text-gray-500 hover:text-gray-800">
-            <XIcon className="w-6 h-6" />
-          </button>
+    <div className="p-6 md:p-10 bg-white flex-1 overflow-y-auto">
+        <div className="flex items-center mb-6">
+            <button onClick={onBackToStore} className="flex items-center text-gray-600 hover:text-brand-dark">
+                <ArrowLeft size={20} className="mr-2"/>
+                Volver a la tienda
+            </button>
         </div>
-        <ProductForm onProductAdd={onProductAdd} />
-      </div>
+        <div className="max-w-4xl mx-auto">
+            <h1 className="text-3xl font-bold text-brand-dark mb-6">Panel de Administrador</h1>
+            <div className="bg-white p-8 rounded-lg shadow-md">
+                <h2 className="text-2xl font-bold text-brand-dark mb-4">Añadir Nuevo Producto</h2>
+                <ProductForm onProductAdded={onProductAdded} />
+            </div>
+        </div>
     </div>
   );
 };
